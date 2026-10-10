@@ -10,7 +10,6 @@
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
 body{margin:0}
-
 /* Layout: one narrow column, chunky cards, bottom tab bar. Latin words are the biggest thing on every screen. */
 :root{
   --bg:#EEF3EE; --surface:#FFFFFF; --ink:#14262A; --muted:#55696C; --line:#D3DDD6; --soft:#E2EAE4;
@@ -138,6 +137,7 @@ button{font:inherit;color:inherit}
 .field input,.field textarea{font:inherit;font-weight:600;border:2px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--bg);color:var(--ink);width:100%}
 .field textarea{resize:vertical;min-height:200px}
 
+.tin{width:100%;font:inherit;font-size:1.25rem;padding:14px 16px;border-radius:14px;border:2px solid var(--line);background:var(--surface);color:inherit;box-sizing:border-box;margin:4px 0 12px}.tin:focus{outline:3px solid var(--accent);outline-offset:1px}.tin.ok{border-color:var(--good)}.tin.no{border-color:var(--bad)}
 .nav{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:2px solid var(--line);padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px))}
 .navin{max-width:560px;margin:0 auto;display:flex;gap:4px}
 .navin button{flex:1;min-width:0;border:0;background:transparent;border-radius:12px;padding:6px 2px;display:flex;flex-direction:column;align-items:center;gap:1px;cursor:pointer;color:var(--muted);font-weight:800;font-size:11px}
@@ -147,8 +147,6 @@ button{font:inherit;color:inherit}
 @media (min-width:480px){.opts{grid-template-columns:1fr 1fr}}
 @media (prefers-reduced-motion:reduce){.inner{transition:none}.fb{animation:none}.hpbar i{transition:none}}
 </style>
-</head>
-<body>
 <div id="app"></div>
 <script>
 (function(){
@@ -262,7 +260,7 @@ function mkQ(w,type,r,pool){
   return{w:w,type:type,opts:shuf(opts,r)};
 }
 function pickType(w,r){r=r||Math.random;var ts=w.emo?['ld','dl','pl']:['ld','dl'];return ts[Math.floor(r()*ts.length)];}
-function newQ(mode,words,l,r,pool){Q={mode:mode,l:l||0,qs:words.map(function(w){return mkQ(w,pickType(w,r),r,pool);}),i:0,res:[],streak:0,lives:3,xp:0,ans:null,msg:'',gain:0,final:null,rank0:rank()};view='quiz';go();}
+function newQ(mode,words,l,r,pool){Q={mode:mode,l:l||0,qs:words.map(function(w){return mkQ(w,pickType(w,r),r,pool);}),i:0,res:[],streak:0,lives:3,xp:0,ans:null,msg:'',gain:0,final:null,rank0:rank(),typed:''};if(mode==='type')Q.qs.forEach(function(q){q.type=Math.random()<0.6?'dlt':'ldt';});view='quiz';go();}
 function dailyBlocked(){return Q&&!Q.final&&Q.mode==='daily';}
 function toHome(msg){note=msg;go('home');}
 function startQuiz(){
@@ -283,6 +281,53 @@ function startDaily(){
   var r=mulberry(hash('monstra-'+today()));
   newQ('daily',shuf(pool,r).slice(0,Math.min(10,pool.length)),0,r,pool);
 }
+/* Tippen: ohne Bild, ohne Auswahl */
+function nz(s){return String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/ß/g,'ss').replace(/\s+/g,' ').trim();}
+function lev(a,b){var m=a.length,n=b.length,d=[],i,j;for(i=0;i<=m;i++)d[i]=[i];for(j=1;j<=n;j++)d[0][j]=j;for(i=1;i<=m;i++)for(j=1;j<=n;j++)d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a.charAt(i-1)===b.charAt(j-1)?0:1));return d[m][n];}
+function noArt(t){return t.replace(/^(der|die|das|ein|eine|zu|sich)\s+/,'');}
+function dParts(de){var base=String(de).replace(/\([^)]*\)/g,' '),out=[];base.split(/[,;]/).forEach(function(p){var t=nz(p);if(t){out.push(t);out.push(noArt(t));}});var f=nz(base);if(f)out.push(f);return out.filter(Boolean);}
+function checkTyped(q,val){
+  var w=q.w,t=nz(val);
+  if(q.type==='dlt'){var a=nz(w.lat),b=nz(String(w.lat).split(',')[0]);return{ok:t===a||t===b,near:false};}
+  var tt=noArt(t),ps=dParts(w.de),i;
+  for(i=0;i<ps.length;i++)if(t===ps[i]||tt===ps[i])return{ok:true,near:false};
+  for(i=0;i<ps.length;i++)if(ps[i].length>=5&&lev(tt,ps[i])<=1)return{ok:true,near:true};
+  return{ok:false,near:false};
+}
+function typeAnswer(skip){
+  if(!Q||Q.mode!=='type'||Q.ans!=null)return;
+  var el=document.getElementById('tans'),val=el?el.value:(Q.typed||'');
+  if(!skip&&!val.trim())return;
+  var q=Q.qs[Q.i],w=q.w,r=skip?{ok:false,near:false}:checkTyped(q,val),b=bx(w),g=0;
+  Q.typed=skip?'':val.trim();Q.ans=1;Q.tok=r.ok;Q.near=r.near;
+  st.seen[w.id]=1;st.box[w.id]=r.ok?Math.min(3,b+1):0;
+  if(r.ok){Q.streak++;g=15;if(Q.streak%5===0)g+=5;Q.msg=r.near?'Fast: nur ein kleiner Tippfehler':['Richtig!','Stark!','Genau!','Sitzt!'][Math.floor(Math.random()*4)];}
+  else{Q.streak=0;Q.msg=skip?'Nicht schlimm!':'Fast!';}
+  Q.res.push(r.ok);Q.gain=g;Q.xp+=g;addXp(g);save();render();
+  var nb=document.getElementById('nextbtn');if(nb)nb.focus();
+}
+function typeV(){
+  var q=Q.qs[Q.i],w=q.w,done=Q.ans!=null,last=Q.i>=Q.qs.length-1,dl=q.type==='dlt';
+  var dots=Q.qs.map(function(_,i){var c=i<Q.res.length?(Q.res[i]?'g':'b'):(i===Q.i?'c':'');return '<i class="'+c+'"></i>';}).join('');
+  var head='<div class="counter"><div class="prog" aria-label="Fortschritt">'+dots+'</div><button class="btn sm ghost" data-a="quit">✕</button></div>';
+  var lab=dl?'Wie heißt das auf Latein? Tippe das Wort.':'Was heißt das auf Deutsch? Eine Bedeutung genügt.';
+  var prompt=dl?'<div class="german">'+esc(w.de)+'</div>':'<div class="latin">'+esc(w.lat)+'</div>';
+  var cls='tin'+(done?(Q.tok?' ok':' no'):'');
+  var inp='<input class="'+cls+'" id="tans" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done" placeholder="Hier tippen …" aria-label="Deine Antwort" value="'+esc(Q.typed||'')+'"'+(done?' disabled':'')+'>';
+  var btns=done?'':'<div class="two"><button class="btn sec" data-a="tskip">Weiß ich nicht</button><button class="btn" data-a="tcheck">Prüfen</button></div>';
+  var fb='';
+  if(done){fb='<div class="fb '+(Q.tok?'ok':'no')+'" aria-live="polite"><div class="fbh">'+esc(Q.msg)+(Q.gain?' +'+Q.gain+' XP':'')+'</div><div class="fbw"><span class="emoji sm">'+(w.emo||'📝')+'</span> <b>'+esc(w.lat)+'</b> = '+esc(w.de)+'</div>'+(w.info?'<div class="muted small">'+esc(w.info)+'</div>':'')+(w.hook?'<div class="hook">💡 '+esc(w.hook)+'</div>':'')+'<button class="btn" id="nextbtn" data-a="next">'+(last?'Ergebnis':'Weiter')+'</button></div>';}
+  return head+'<div class="qcard"><div class="muted small">'+lab+'</div>'+prompt+'</div>'+inp+btns+fb;
+}
+
+
+function startType(){
+  if(dailyBlocked()){go('quiz');return;}
+  var ws=selWords();
+  if(!ws.length){if(typeof toHome==='function')toHome('Lege zuerst eine Liste an.');return;}
+  newQ('type',pickW(ws,Math.min(10,ws.length)));
+}
+
 function startCards(){
   var ws=selWords();
   if(!ws.length){toHome(st.lists.length?'Wähle mindestens eine Liste aus.':'Lege zuerst eine Liste an.');return;}
@@ -302,13 +347,14 @@ function answer(idx){
 function nextQ(){
   if(!Q||Q.ans==null)return;
   var last=Q.i>=Q.qs.length-1,dead=Q.mode==='boss'&&Q.lives<=0;
-  if(last||dead){finish();}else{Q.i++;Q.ans=null;Q.msg='';Q.gain=0;}
+  if(last||dead){finish();}else{Q.i++;Q.ans=null;Q.msg='';Q.gain=0;Q.typed='';Q.tok=null;Q.near=false;}
   render();window.scrollTo(0,0);
 }
 function finish(){
   var n=Q.res.length,score=Q.res.filter(Boolean).length,bonus=0,win=false;
   if(Q.mode==='boss'){win=Q.lives>0;if(win){bonus=st.boss[Q.l]?20:50;st.boss[Q.l]=true;}}
   else if(Q.mode==='daily'){bonus=30;st.daily={date:today(),score:score,n:n,res:Q.res.slice()};}
+  else if(Q.mode==='type'){bonus=score===n?30:(score/n>=0.8?15:0);}
   else{bonus=score===n?20:(score/n>=0.8?10:0);}
   addXp(bonus);Q.xp+=bonus;Q.final={score:score,n:n,win:win,bonus:bonus};save();
 }
@@ -348,6 +394,7 @@ function homeV(){
   }).join('');
   return nt+'<section class="hero"><div class="rankrow"><span class="rk">'+r.e+'</span><div><div class="rkn">'+r.n+'</div><div class="muted small">'+x.txt+'</div></div></div><div class="xpbar" role="progressbar" aria-valuenow="'+x.pct+'" aria-valuemin="0" aria-valuemax="100"><i style="width:'+x.pct+'%"></i></div><div class="muted small">🐲 '+collTotal()+'/'+(st.lists.length*4)+' Monster-Punkte · 🔥 '+curStreak()+' Tage in Folge</div></section>'+
   '<div class="actions"><button class="btn big" data-a="startCards">🃏 Karten</button><button class="btn big" data-a="startQuiz">🎯 Quiz</button></div>'+
+  '<div class="actions"><button class="btn big sec" data-a="startType">⌨️ Tippen (schwer)</button></div>'+
   '<div><h2>Was üben?</h2><p class="muted small">'+n+' Wörter ausgewählt. Tippe auf eine Liste, um sie an- oder abzuwählen. Mit „Boss“ trittst du gegen das Monster der Liste an.</p></div>'+
   '<div class="leks">'+leks+'</div>'+
   '<button class="btn sec" data-a="newList">➕ Liste anlegen</button>'+
@@ -413,11 +460,14 @@ function resultV(){
   } else if(Q.mode==='daily'){
     title='Tagesrätsel '+dd();sub='Morgen warten neue Wörter.';
     share='Monstra Latina '+dd()+' · '+f.score+'/'+f.n+'\n'+grid;
+  } else if(Q.mode==='type'){
+    title=f.score===f.n?'Perfekt getippt!':'Geschafft!';sub='';
+    share='Monstra Latina · Tippen '+f.score+'/'+f.n+'\n'+grid;
   } else {
     title=f.score===f.n?'Perfekt!':'Geschafft!';sub='';
     share='Monstra Latina · Quiz '+f.score+'/'+f.n+'\n'+grid;
   }
-  var again=Q.mode==='boss'?'<button class="btn" data-a="boss" data-l="'+Q.l+'">Nochmal</button>':Q.mode==='quiz'?'<button class="btn" data-a="startQuiz">Neues Quiz</button>':'';
+  var again=Q.mode==='boss'?'<button class="btn" data-a="boss" data-l="'+Q.l+'">Nochmal</button>':Q.mode==='quiz'?'<button class="btn" data-a="startQuiz">Neues Quiz</button>':Q.mode==='type'?'<button class="btn" data-a="startType">Nochmal tippen</button>':'';
   return '<section class="card center">'+up+body+'<div class="bigscore">'+f.score+'/'+f.n+'</div><h2 style="margin:0">'+esc(title)+'</h2>'+(sub?'<p class="muted">'+esc(sub)+'</p>':'')+'<div class="grid">'+grid+'</div><p>+'+Q.xp+' XP</p>'+shareBlock(share)+'<div class="actions" style="width:100%">'+again+'<button class="btn ghost" data-a="quit">Zur Startseite</button></div></section>';
 }
 
@@ -456,10 +506,11 @@ function render(){
   if(view==='home')b=homeV();
   else if(view==='edit')b=E?editV():homeV();
   else if(view==='cards')b=C?cardsV():homeV();
-  else if(view==='quiz')b=Q?(Q.final?resultV():quizV()):homeV();
+  else if(view==='quiz')b=Q?(Q.final?resultV():(Q.mode==='type'?typeV():quizV())):homeV();
   else if(view==='daily')b=dailyV();
   else b=collV();
   app.innerHTML='<div class="wrap">'+topbar()+b+'</div>'+nav();
+  if(view==='quiz'&&Q&&Q.mode==='type'&&!Q.final&&Q.ans==null){var ti=document.getElementById('tans');if(ti){ti.focus();}}
 }
 function go(v){if(v)view=v;render();window.scrollTo(0,0);}
 
@@ -507,7 +558,10 @@ function act(a,d,e){
       if(a==='know'){if(b<2)st.box[w.id]=b+1;addXp(2);C.xp+=2;C.known++;}
       else{st.box[w.id]=Math.max(0,b-1);if(!C.again[w.id]){C.again[w.id]=1;C.deck.push(w.id);C.tot++;}save();}
       C.i++;C.flip=false;render();window.scrollTo(0,0);break;}
-    case 'opt':if(+d.i>=0&&+d.i<4)answer(+d.i);break;
+    case 'opt':if(Q&&Q.mode!=='type'&&+d.i>=0&&+d.i<4)answer(+d.i);break;
+    case 'startType':startType();break;
+    case 'tcheck':typeAnswer(false);break;
+    case 'tskip':typeAnswer(true);break;
     case 'next':nextQ();break;
     case 'quit':C=null;Q=null;go('home');break;
     case 'copy':{
@@ -521,6 +575,8 @@ function act(a,d,e){
     case 'reset2':st=D();save();buildW();C=null;Q=null;E=null;resetStep=0;go('home');break;
   }
 }
+app.addEventListener('input',function(e){if(e.target.id==='tans'&&Q)Q.typed=e.target.value;});
+app.addEventListener('keydown',function(e){if(e.target.id==='tans'&&e.key==='Enter'){e.preventDefault();typeAnswer(false);}});
 app.addEventListener('click',function(e){var t=e.target.closest('[data-a]');if(!t)return;act(t.dataset.a,t.dataset,e);});
 app.addEventListener('input',function(e){if(!E)return;if(e.target.id==='lname')E.name=e.target.value;else if(e.target.id==='ltext')E.text=e.target.value;});
 app.addEventListener('change',function(e){
